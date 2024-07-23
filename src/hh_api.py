@@ -1,89 +1,60 @@
 from abc import ABC, abstractmethod
 import requests
+from requests import Response
 
-class VacancyAPI(ABC):
-    """Абстрактный класс для работы с API сервиса с вакансиями."""
+
+class ApiVacancies(ABC):
+    """Абстрактный класс"""
 
     @abstractmethod
-    def get_vacancies(self, keyword):
-        """Получение списка вакансий по ключевому слову."""
+    def get_response(self, *args, **kwargs):
+        """Абстрактный метод запроса к api"""
         pass
 
-class HHVacancyAPI(VacancyAPI):
-    """Класс для работы с API HeadHunter."""
+    @abstractmethod
+    def get_vacancies_response(self, *args, **kwargs):
+        """Абстрактный метод получения вакансий"""
+        pass
+
+    @abstractmethod
+    def get_filter_vacancies(self, *args, **kwargs):
+        """Абстрактный метод сортировки вакансий"""
+        pass
+
+
+class HeadHunterAPI(ApiVacancies):
+    """Класс HeadHunter выполняет запрос к API HH.ru и получает вакансии."""
 
     def __init__(self):
-        self.url = 'https://api.hh.ru/vacancies'
-        self.headers = {'User-Agent': 'HH-User-Agent'}
-        self.params = {'text': '', 'page': 0, 'per_page': 20}
+        """Инициализация класса HeadHunter"""
+        self.url = "https://api.hh.ru/vacancies"
 
-    def get_vacancies(self, keyword):
-        """Получение списка вакансий по ключевому слову."""
-        self.params['text'] = keyword
-        vacancies = []
-        while self.params.get('page') != 20:
-            response = requests.get(self.url, headers=self.headers, params=self.params)
-            vacancies.extend(response.json()['items'])
-            self.params['page'] += 1
+    def get_response(self, text: str, per_page: int) -> Response:
+        """Запрос на API HH.ru"""
+        params = {"text": f"NAME:{text}", "per_page": per_page}
+        response = requests.get(self.url, params=params)
+        return response
+
+    def get_vacancies_response(self, text: str, per_page: int) -> list:
+        """Получение вакансий с HH.ru"""
+        vacancies = self.get_response(text, per_page).json()["items"]
         return vacancies
 
-class Vacancy:
-    """Класс для работы с вакансиями."""
-
-    def __init__(self, title, link, salary, description, id=None):
-        self.id = id
-        self.title = title
-        self.link = link
-        self.salary = self._validate_salary(salary)
-        self.description = description
-
-    def _validate_salary(self, salary):
-        """Валидация зарплаты."""
-        if salary:
-            return salary
-        else:
-            return "Зарплата не указана"
-
-    def __lt__(self, other):
-        """Сравнение вакансий по зарплате."""
-        if self.salary == "Зарплата не указана":
-            return False
-        elif other.salary == "Зарплата не указана":
-            return True
-        else:
-            return self.salary < other.salary
-
-    def __gt__(self, other):
-        """Сравнение вакансий по зарплате."""
-        if self.salary == "Зарплата не указана":
-            return True
-        elif other.salary == "Зарплата не указана":
-            return False
-        else:
-            return self.salary > other.salary
-
-    def __eq__(self, other):
-        """Сравнение вакансий по зарплате."""
-        if self.salary == "Зарплата не указана":
-            return False
-        elif other.salary == "Зарплата не указана":
-            return False
-        else:
-            return self.salary == other.salary
-
-# Пример использования
-hh_api = HHVacancyAPI()
-vacancies = hh_api.get_vacancies('JavaScript Developer')
-
-for vacancy_data in vacancies:
-    vacancy = Vacancy(
-        title=vacancy_data['name'],
-        link=vacancy_data['alternate_url'],
-        salary=vacancy_data['salary'],
-        description=vacancy_data['snippet']['requirement'],
-    )
-    print(f"Название вакансии: {vacancy.title}")
-    print(f"Ссылка на вакансию: {vacancy.link}")
-    print(f"Зарплата: {vacancy.salary}")
-    print(f"Описание: {vacancy.description}")
-    print("-" * 20)
+    def get_filter_vacancies(self, text: str, per_page: int = 30) -> list:
+        """Фильтрация вакансий"""
+        filtered_vacancies = []
+        vacancies_filtered = self.get_vacancies_response(text, per_page)
+        for vacancy in vacancies_filtered:
+            filtered_vacancies.append(
+                {
+                    "name": vacancy["name"],
+                    "salary_from": vacancy["salary"]["from"],
+                    "salary_to": vacancy["salary"]["to"],
+                    "salary_currency": vacancy["salary"]["currency"],
+                    "url": vacancy["alternate_url"],
+                    "employer": vacancy["employer"]["name"],
+                    "requirement": vacancy["snippet"]["requirement"],
+                    "responsibility": vacancy["snippet"]["responsibility"],
+                }
+            )
+            return filtered_vacancies
