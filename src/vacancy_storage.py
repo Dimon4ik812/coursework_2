@@ -27,8 +27,21 @@ class JSONSaver(FileAbstractClass):
         self.filename = filename
 
     def write_data(self, vacancies):
+        try:
+            # Считываем существующие данные
+            with open(self.filename, "r") as f:
+                existing_data = json.load(f)
+        except FileNotFoundError:
+            # Если файл не существует, начинаем с пустого списка
+            existing_data = []
+
+        # Добавляем новые данные к существующим
+        existing_data.extend(vacancies)
+
+        # Записываем обновленные данные в файл
         with open(self.filename, "w") as f:
-            json.dump(vacancies, f, ensure_ascii=False, indent=4)
+            json.dump(existing_data, f, ensure_ascii=False, indent=4)
+
 
     def get_vacancies(self) -> list:
         with open(self.filename) as file:
